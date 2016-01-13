@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.os.Bundle;
 
 import android.speech.RecognizerIntent;
+import android.speech.tts.TextToSpeech;
 import android.support.v4.app.Fragment;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -25,7 +26,7 @@ import java.util.Locale;
  */
 public class Start extends Fragment implements View.OnClickListener{
     private TextView spoken;
-
+    private MainActivity myActivity;
 
     public Start() {
         // Required empty public constructor
@@ -42,6 +43,8 @@ public class Start extends Fragment implements View.OnClickListener{
         spoken = (TextView) view.findViewById(R.id.spoken);
         ImageButton button = (ImageButton) view.findViewById(R.id.imageButton);
         button.setOnClickListener(this);
+        myActivity = (MainActivity) getActivity();
+
 
         //return view;
 
@@ -78,7 +81,7 @@ public class Start extends Fragment implements View.OnClickListener{
             case 100: {if(result_code ==  -1 && i!=null) {
                 ArrayList<String> result = i.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
                 spoken.setText(result.get(0));
-
+                myActivity.speak_Queue_Add(result.get(0));
 
             }
             }
