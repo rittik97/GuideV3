@@ -10,6 +10,7 @@ import android.os.Build;
 import android.speech.RecognizerIntent;
 import android.speech.tts.TextToSpeech;
 import android.support.design.widget.NavigationView;
+import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.content.ContextCompat;
@@ -18,6 +19,7 @@ import android.support.v4.widget.DrawerLayout;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.Toolbar;
+import android.telephony.SmsManager;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -54,6 +56,8 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
     private static final String TAG = "Logger is Activity";
     private Location mLastLocation;
     private LocationRequest mLocationRequest;
+    private  static int requestfinelocation=0;
+    private Location mCurrentLocation;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -183,7 +187,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
         } else {
             FragmentTransaction fragmentTransaction =
                     getFragmentManager().beginTransaction();
-            fragmentTransaction.add(R.id.flContent, mapfragment);
+            fragmentTransaction.replace(R.id.flContent, mapfragment);
             fragmentTransaction.commit();
             mapfragment.getMapAsync(this);
 
@@ -225,21 +229,38 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
                 .position(new LatLng(0, 0))
                 .title("Marker"));
     }
+    public boolean haspermission(String permission){
+        int permissionCheck = ContextCompat.checkSelfPermission(getApplicationContext(), permission);
+        speak_Queue_Add(String.valueOf(permissionCheck));
+        if (permissionCheck == PackageManager.PERMISSION_GRANTED) {
+            return true;
 
+        }
+        else
+        {
+            return false;
+
+        }
+    }
     @Override
     public void onConnected(Bundle bundle) {
         int permissionCheck = ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_FINE_LOCATION);
-        speak_Queue_Add( String.valueOf(permissionCheck));
+        speak_Queue_Add(String.valueOf(permissionCheck));
         if (permissionCheck == PackageManager.PERMISSION_GRANTED) {
             //Execute location service call if user has explicitly granted ACCESS_FINE_LOCATION..
             createLocationRequest();
             startLocationUpdates();
 
         }
+        else
+        {
+            requestpermission();
+
+        }
         if(mLastLocation != null) {
             mLastLocation = LocationServices.FusedLocationApi.getLastLocation(
                     mGoogleApiClient);
-            speak_Queue_Add(mLastLocation.toString());
+           // speak_Queue_Add(mLastLocation.toString());
         }
 
 
@@ -247,6 +268,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
 
     @Override
     public void onConnectionSuspended(int i) {
+
 
     }
 
@@ -290,11 +312,103 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
 
     @Override
     public void onLocationChanged(Location location) {
-        Location mCurrentLocation = location;
+        mCurrentLocation = location;
 
-        Toast.makeText(this, mCurrentLocation.toString(), Toast.LENGTH_SHORT).show();
-        makecameragotocurrentlocation(mCurrentLocation);
-        speak_Queue_Add(mCurrentLocation.toString());
+        //Toast.makeText(this, mCurrentLocation.toString(), Toast.LENGTH_SHORT).show();
+        //makecameragotocurrentlocation(mCurrentLocation);
+        //speak_Queue_Add(mCurrentLocation.toString());
+    }
+    public void requestsmspermission(){
+        if (ContextCompat.checkSelfPermission(MainActivity.this,
+                Manifest.permission.SEND_SMS)
+                != PackageManager.PERMISSION_GRANTED) {
+
+            ActivityCompat.requestPermissions(MainActivity.this,
+                    new String[]{Manifest.permission.SEND_SMS},
+                    requestfinelocation);
+
+        }
+
+    }
+
+    public void requestpermission(){
+        if (ContextCompat.checkSelfPermission(MainActivity.this,
+                Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+
+            // Should we show an explanation?
+            //if (ActivityCompat.shouldShowRequestPermissionRationale(thisActivity,
+              //      Manifest.permission.READ_CONTACTS)) {
+
+                // Show an expanation to the user *asynchronously* -- don't block
+                // this thread waiting for the user's response! After the user
+                // sees the explanation, try again to request the permission.
+
+            //} else {
+
+                // No explanation needed, we can request the permission.
+
+                ActivityCompat.requestPermissions(MainActivity.this,
+                        new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
+                        requestfinelocation);
+
+                // MY_PERMISSIONS_REQUEST_READ_CONTACTS is an
+                // app-defined int constant. The callback method gets the
+                // result of the request.
+  //          }
+        }
+
+    }
+    public void sendsms(Location Loc){
+
+        SmsManager smsManager = SmsManager.getDefault();
+        //String here=reversegeocoder(Loc);
+        String here="Here";
+        smsManager.sendTextMessage("+14047898139",null,"I'm at "+String.valueOf(Loc.getLatitude())+" "+String.valueOf(Loc.getLongitude()),null,null);
+        smsManager.sendTextMessage("+7187107474",null,"I'm at "+String.valueOf(Loc.getLatitude())+" "+String.valueOf(Loc.getLongitude()),null,null);
+        //smsManager.sendTextMessage("+7187107474",null,"work",null,null);
+
+    }
+
+    public void listens() {
+        Intent i = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        i.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.ENGLISH);
+        i.putExtra(RecognizerIntent.EXTRA_PROMPT, "Say Something!");
+
+        try {
+            startActivityForResult(i, 100);
+        } catch (Exception e) {
+            //Toast.makeText()
+        }
+
+    }
+    public void onActivityResult(int request_code, int result_code, Intent i){
+        super.onActivityResult(request_code, result_code, i);
+
+        switch(request_code){
+            case 100: {if(result_code ==  -1 && i!=null) {
+                ArrayList<String> result = i.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+                //spoken.setText(result.get(0));
+                speak_Queue_Add(result.get(0));
+                Toast.makeText(this, result.get(0).toString(), Toast.LENGTH_SHORT).show();
+                understand(result.get(0));
+
+            }
+            }
+            break;
+        }
+
+    }
+    public void understand(String s){
+        if(s.indexOf("text")>0) {
+            if (haspermission(Manifest.permission.SEND_SMS)) {
+                sendsms(mCurrentLocation);
+            } else {
+                requestsmspermission();
+            }
+        }
+
     }
 
 

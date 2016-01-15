@@ -22,6 +22,7 @@
             android:id="@+id/flContent"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
+
     </LinearLayout>
 
     <!-- The navigation drawer that comes from the left -->
