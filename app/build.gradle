@@ -6,7 +6,7 @@ android {
 
     defaultConfig {
         applicationId "com.example.rittik.guide"
-        minSdkVersion 15
+        minSdkVersion 18
         targetSdkVersion 23
         versionCode 1
         versionName "1.0"
@@ -27,4 +27,5 @@ dependencies {
     compile 'com.android.support:appcompat-v7:23.1.1'
     compile 'com.google.android.gms:play-services:7.3.0'
     compile 'com.android.support:design:23.1.1'
+    compile 'com.mbientlab:metawear:2.3.0'
 }

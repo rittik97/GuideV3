@@ -15,5 +15,9 @@ buildscript {
 allprojects {
     repositories {
         jcenter()
+        ivy {
+            url "http://ivyrep.mbientlab.com"
+            layout "gradle"
+        }
     }
 }

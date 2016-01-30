@@ -3,8 +3,13 @@ package com.example.rittik.guide;
 import android.Manifest;
 import android.app.AlertDialog;
 import android.app.FragmentTransaction;
+import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothManager;
+import android.content.ComponentName;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.location.Address;
@@ -14,6 +19,7 @@ import android.location.Location;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Handler;
+import android.os.IBinder;
 import android.os.SystemClock;
 import android.speech.RecognizerIntent;
 import android.speech.tts.TextToSpeech;
@@ -71,9 +77,13 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import com.mbientlab.metawear.MetaWearBleService;
+import com.mbientlab.metawear.MetaWearBoard;
+
 //import android.widget.Toolbar;
 
-public class MainActivity extends AppCompatActivity implements TextToSpeech.OnInitListener, OnMapReadyCallback,GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener,LocationListener {
+public class MainActivity extends AppCompatActivity implements TextToSpeech.OnInitListener, OnMapReadyCallback,GoogleApiClient.ConnectionCallbacks
+        , GoogleApiClient.OnConnectionFailedListener,LocationListener, ServiceConnection {
     private DrawerLayout mDrawer;
     private Toolbar toolbar;
     private NavigationView nvDrawer;
@@ -102,6 +112,11 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
     private final Handler mHandler = new Handler();
     private List<Marker> markers = new ArrayList<Marker>();
     private Marker selectedMarker;
+    private MetaWearBleService.LocalBinder serviceBinder;
+    private final String MW_MAC_ADDRESS= "D1:C6:B6:0B:E6:56";
+    private MetaWearBoard mwBoard;
+
+
 
     ArrayList <String> turns = null;
 
@@ -141,6 +156,8 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
         builder.show();
 
         buildGoogleApiClient();
+        getApplicationContext().bindService(new Intent(this, MetaWearBleService.class),
+                this, Context.BIND_AUTO_CREATE);
 
 
         // Set a Toolbar to replace the ActionBar.
@@ -168,6 +185,11 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
         fragmentManager = getSupportFragmentManager();
         fragmentManager.beginTransaction().add(R.id.flContent, fragment).commit();
 
+    }
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        getApplicationContext().unbindService(this);
     }
 
     @Override
@@ -404,7 +426,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
     public void onLocationChanged(Location location) {
         mCurrentLocation = location;
 
-        //Toast.makeText(this, mCurrentLocation.toString(), Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, mCurrentLocation.toString(), Toast.LENGTH_SHORT).show();
         //makecameragotocurrentlocation(mCurrentLocation);
         //speak_Queue_Add(mCurrentLocation.toString());
     }
@@ -563,7 +585,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
 
 
             List<Address> addresses = geocoder.getFromLocationName(destination, 10
-                    , mLastLocation.getLatitude() - 0.015, mLastLocation.getLongitude() - 0.009, mLastLocation.getLatitude() + 0.015, mLastLocation.getLongitude() + 0.009
+                    , mCurrentLocation.getLatitude() - 0.015, mCurrentLocation.getLongitude() - 0.009, mCurrentLocation.getLatitude() + 0.015, mCurrentLocation.getLongitude() + 0.009
             );
             if (!addresses.isEmpty() && addresses != null) {
                 /* Displaying Returned Addresses
@@ -577,7 +599,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
                 int distances[] = new int[addresses.size()];
                 for (int i = 0; i < addresses.size(); i++) {
                     float result[] = new float[3];
-                    Location.distanceBetween(mLastLocation.getLatitude(), mLastLocation.getLongitude()
+                    Location.distanceBetween(mCurrentLocation.getLatitude(), mCurrentLocation.getLongitude()
                             , addresses.get(i).getLatitude(), addresses.get(i).getLongitude(), result
                     );
                     distances[i] = (int) result[0];
@@ -638,8 +660,8 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
 
             toPosition = geocoder(dest);
             if (toPosition.latitude == 0 && toPosition.longitude == 0) return;
-            Double la = mLastLocation.getLatitude();
-            Double ln = mLastLocation.getLongitude();
+            Double la = mCurrentLocation.getLatitude();
+            Double ln = mCurrentLocation.getLongitude();
             fromPosition = new LatLng(la, ln);
 
         } catch (Exception e) {
@@ -672,6 +694,9 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
             //while (parserTask.getStatus().equals(AsyncTask.Status.FINISHED) ==false && gi.getStatus().equals(AsyncTask.Status.FINISHED)==false)
 
         }
+
+
+
     private class DownloadTask extends AsyncTask<String, Void, String> { //////GETTING JSON
 
         // Downloading data in non-ui thread
@@ -1328,6 +1353,51 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
             addMarkerToMap(points.get(i));
         }
 
+    }
+    @Override
+    public void onServiceConnected(ComponentName name, IBinder service) {
+        serviceBinder = (MetaWearBleService.LocalBinder) service;
+        retrieveBoard();
+        speak_Queue_Add("getting board");
+
+
+    }
+
+    @Override
+    public void onServiceDisconnected(ComponentName name) {
+
+    }
+    public void retrieveBoard() {
+        final BluetoothManager btManager=
+                (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
+        final BluetoothDevice remoteDevice=
+             btManager.getAdapter().getRemoteDevice(MW_MAC_ADDRESS);
+
+        // Create a MetaWear board object for the Bluetooth Device
+        mwBoard= serviceBinder.getMetaWearBoard(remoteDevice);
+        connectBoard();
+    }
+    private final MetaWearBoard.ConnectionStateHandler stateHandler= new MetaWearBoard.ConnectionStateHandler() {
+        @Override
+        public void connected() {
+            Log.i("MainActivity", "Connected");
+            speak_Queue_Add("Got Board");
+        }
+
+        @Override
+        public void disconnected() {
+            Log.i("MainActivity", "Connected Lost");
+        }
+
+        @Override
+        public void failure(int status, Throwable error) {
+            Log.e("MainActivity", "Error connecting", error);
+        }
+    };
+
+    public void connectBoard() {
+        mwBoard.setConnectionStateHandler(stateHandler);
+        mwBoard.connect();
     }
 
 
