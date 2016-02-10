@@ -115,7 +115,10 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
     private MetaWearBleService.LocalBinder serviceBinder;
     private final String MW_MAC_ADDRESS= "D1:C6:B6:0B:E6:56";
     private MetaWearBoard mwBoard;
-
+    //routes has Polyline
+    // instructions has turn right on amsterdam
+    //endlocations has coordinates for the turns
+    // turns has maneuver so turn left
 
 
     ArrayList <String> turns = null;
@@ -336,9 +339,12 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
     public void onMapReady(GoogleMap googleMap) {
         map = mapfragment.getMap();
         setupmap();
-        map.addMarker(new MarkerOptions()
-                .position(new LatLng(0, 0))
-                .title("Marker"));
+        if(mCurrentLocation!=null){
+            makecameragotocurrentlocation(mCurrentLocation);
+        }
+       // map.addMarker(new MarkerOptions()
+         //       .position(new LatLng(0, 0))
+           //     .title("Marker"));
     }
 
     public boolean haspermission(String permission) {
@@ -426,9 +432,66 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
     public void onLocationChanged(Location location) {
         mCurrentLocation = location;
 
-        Toast.makeText(this, mCurrentLocation.toString(), Toast.LENGTH_SHORT).show();
+       // Toast.makeText(this, mCurrentLocation.toString(), Toast.LENGTH_SHORT).show();
         //makecameragotocurrentlocation(mCurrentLocation);
         //speak_Queue_Add(mCurrentLocation.toString());
+
+        if(walkingnavigating==true && parserTask.getStatus().equals(AsyncTask.Status.FINISHED) == true
+                && gi.getStatus().equals(AsyncTask.Status.FINISHED) == true
+                && endloc.getStatus().equals(AsyncTask.Status.FINISHED) == true){
+            if(animatenavigating) {
+
+                float results[] = new float[3];
+                double mylat;
+                double mylong;
+                Location loc = (mCurrentLocation);
+
+                Location.distanceBetween(loc.getLatitude(), loc.getLongitude()
+                        , endlocations.get(currentturn).latitude
+                        , endlocations.get(currentturn).longitude,
+                        results
+                );
+
+                if (results[0] < 15) {
+                    //talkthis("turn");
+                    speak_Queue_Add(instructions.get(currentturn).toString());
+
+                    if(nexttturn<turns.size() && currentturn!=0) {
+                        //talkthis(turns.get(nexttturn));
+                        nexttturn++;
+                    }
+
+                    currentturn++;
+                }
+                if (currentturn == totalturns) {//You have reached destination
+                    animatenavigating= false;
+                    lastpoint=true;
+                }
+
+
+            } else if(lastpoint){
+                float results[] = new float[3];
+                double mylat;
+                double mylong;
+                Location loc = mCurrentLocation;
+
+                Location.distanceBetween(loc.getLatitude(), loc.getLongitude()
+                        , destinationloc.latitude
+                        , destinationloc.longitude,
+                        results
+                );
+
+                if (results[0] < 5) {
+
+                    speak_Queue_Add("You have arrived");
+                    lastpoint=false;
+                }
+
+            }
+        }
+
+
+
     }
 
 
@@ -584,7 +647,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
         try {
 
 
-            List<Address> addresses = geocoder.getFromLocationName(destination, 10
+            List<Address> addresses = geocoder.getFromLocationName(destination, 15
                     , mCurrentLocation.getLatitude() - 0.015, mCurrentLocation.getLongitude() - 0.009, mCurrentLocation.getLatitude() + 0.015, mCurrentLocation.getLongitude() + 0.009
             );
             if (!addresses.isEmpty() && addresses != null) {
@@ -646,9 +709,14 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
 
     public void startclick(View v) {
         //map.clear();
+        if(!isnavigating) return;
+        if(flagforcoordinates==1 && flagforendturns==1 && flagforinstructions==1 && flagforendturns==1 && isnavigating==true){
+            animator.stopAnimation();
+            map.clear();
+            return;
+        }
 
-
-        LatLng fromPosition=null;// = new LatLng(40.798506, -73.964577);
+            LatLng fromPosition=null;// = new LatLng(40.798506, -73.964577);
         LatLng toPosition=null;// = new LatLng(40.798204, -73.952304);//40.8079639, -73.9630146);
         try {
             EditText destination = (EditText) findViewById(R.id.textView);
@@ -817,7 +885,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
             map.addPolyline(lineOptions);
             addDefaultLocations();
             //talkthis("finish one");
-            if(flagforcoordinates==1 && flagforendturns==1 && flagforinstructions==1 && flagforendturns==1) {
+            if(flagforcoordinates==1 && flagforendturns==1 && flagforinstructions==1 && flagforendturns==1 && isnavigating==true) {
 
                 if(animatenavigating)animator.startAnimation(true);
                 //talkthis(instructions.get(currentturn).toString());
@@ -860,7 +928,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
             // Toast.makeText(getApplicationContext(),String.valueOf(instructions.size()), Toast.LENGTH_SHORT).show();
             //Toast.makeText(getApplicationContext(),instructions.toString(), Toast.LENGTH_LONG).show();
 
-            if(flagforcoordinates==1 && flagforendturns==1 && flagforinstructions==1 && flagforendturns==1) {
+            if(flagforcoordinates==1 && flagforendturns==1 && flagforinstructions==1 && flagforendturns==1 && isnavigating==true) {
                 if(animatenavigating)animator.startAnimation(true);
             }
 
@@ -901,7 +969,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
                     .position(destinationloc)
                     .title("Destination"));
 
-            if(flagforcoordinates==1 && flagforendturns==1 && flagforinstructions==1 && flagforendturns==1) {
+            if(flagforcoordinates==1 && flagforendturns==1 && flagforinstructions==1 && flagforendturns==1 && isnavigating==true) {
                 if(animatenavigating)animator.startAnimation(true);
 
             }
@@ -935,7 +1003,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
 
             flagforendturns=1;
             //Toast.makeText(getApplicationContext(),turns.toString(), Toast.LENGTH_SHORT).show();
-            if(flagforcoordinates==1 && flagforendturns==1 && flagforinstructions==1 && flagforendturns==1) {
+            if(flagforcoordinates==1 && flagforendturns==1 && flagforinstructions==1 && flagforendturns==1 && isnavigating==true) {
                 if(animatenavigating)animator.startAnimation(true);
 
             }
@@ -1357,7 +1425,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
     @Override
     public void onServiceConnected(ComponentName name, IBinder service) {
         serviceBinder = (MetaWearBleService.LocalBinder) service;
-        retrieveBoard();
+        //retrieveBoard();
         speak_Queue_Add("getting board");
 
 
