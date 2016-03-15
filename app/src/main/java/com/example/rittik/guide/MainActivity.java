@@ -79,6 +79,7 @@ import java.util.List;
 import java.util.Locale;
 import com.mbientlab.metawear.MetaWearBleService;
 import com.mbientlab.metawear.MetaWearBoard;
+import com.mbientlab.metawear.module.I2C;
 
 //import android.widget.Toolbar;
 
@@ -113,13 +114,15 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
     private List<Marker> markers = new ArrayList<Marker>();
     private Marker selectedMarker;
     private MetaWearBleService.LocalBinder serviceBinder;
-    private final String MW_MAC_ADDRESS= "D1:C6:B6:0B:E6:56";
+    private final String MW_MAC_ADDRESS="E9:BA:A6:41:99:A8";// "D1:C6:B6:0B:E6:56";
     private MetaWearBoard mwBoard;
-    //routes has Polyline
+
+    //routes, points has Polyline
     // instructions has turn right on amsterdam
     //endlocations has coordinates for the turns
     // turns has maneuver so turn left
-
+    //mcurent location has current Lo
+    //
 
     ArrayList <String> turns = null;
 
@@ -439,7 +442,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
         if(walkingnavigating==true && parserTask.getStatus().equals(AsyncTask.Status.FINISHED) == true
                 && gi.getStatus().equals(AsyncTask.Status.FINISHED) == true
                 && endloc.getStatus().equals(AsyncTask.Status.FINISHED) == true){
-            if(animatenavigating) {
+            if(walkingnavigating) {
 
                 float results[] = new float[3];
                 double mylat;
@@ -454,14 +457,16 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
 
                 if (results[0] < 15) {
                     //talkthis("turn");
-                    speak_Queue_Add(instructions.get(currentturn).toString());
+                    //speak_Queue_Add(instructions.get(currentturn).toString());
 
                     if(nexttturn<turns.size() && currentturn!=0) {
-                        //talkthis(turns.get(nexttturn));
+                        speak_Queue_Add(turns.get(nexttturn).toString());
                         nexttturn++;
                     }
 
                     currentturn++;
+
+                    //Toast.makeText(getApplicationContext(),turns.get(currentturn), Toast.LENGTH_SHORT).show();
                 }
                 if (currentturn == totalturns) {//You have reached destination
                     animatenavigating= false;
@@ -648,7 +653,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
 
 
             List<Address> addresses = geocoder.getFromLocationName(destination, 15
-                    , mCurrentLocation.getLatitude() - 0.015, mCurrentLocation.getLongitude() - 0.009, mCurrentLocation.getLatitude() + 0.015, mCurrentLocation.getLongitude() + 0.009
+                    , mCurrentLocation.getLatitude() - 0.005, mCurrentLocation.getLongitude() - 0.009, mCurrentLocation.getLatitude() + 0.005, mCurrentLocation.getLongitude() + 0.009
             );
             if (!addresses.isEmpty() && addresses != null) {
                 /* Displaying Returned Addresses
@@ -1002,7 +1007,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
         protected void onPostExecute(ArrayList arrayList) {
 
             flagforendturns=1;
-            //Toast.makeText(getApplicationContext(),turns.toString(), Toast.LENGTH_SHORT).show();
+
             if(flagforcoordinates==1 && flagforendturns==1 && flagforinstructions==1 && flagforendturns==1 && isnavigating==true) {
                 if(animatenavigating)animator.startAnimation(true);
 
@@ -1234,18 +1239,19 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
                 if (results[0] < 15) {
                     //talkthis("turn");
                     speak_Queue_Add(instructions.get(currentturn).toString());
-                    /*
+
                     if(nexttturn<turns.size() && currentturn!=0) {
                         int type=turns.get(nexttturn).toString().indexOf("right");
                         try {
-                            if(type!=-1){mwBoard.getModule(Haptic.class).startMotor(75.f, (short) 1500);}
-                            else {mwBoard.getModule(Haptic.class).startMotor(50.f, (short) 500);}
-                        } catch (UnsupportedModuleException e) {
-                            e.printStackTrace();
+                          //  if(type!=-1){mwBoard.getModule(Haptic.class).startMotor(75.f, (short) 1500);}
+                           // else {mwBoard.getModule(Haptic.class).startMotor(50.f, (short) 500);}
+                            sendvibration(type);
+                        } catch (Exception e) {
+                            alertexception(e);
                         }
                         nexttturn++;
                     }
-                    */
+
 
                     currentturn++;
                 }
@@ -1360,6 +1366,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
      */
     public void addMarkerToMap(LatLng latLng) {
         Marker marker = map.addMarker(new MarkerOptions().position(latLng));
+
         markers.add(marker);
 
     }
@@ -1417,15 +1424,16 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
     }
     private void addDefaultLocations() {
 
-        for(int i=0;i<points.size();i++){
+        for(int i=0;i<points.size(); i++){
             addMarkerToMap(points.get(i));
         }
+
 
     }
     @Override
     public void onServiceConnected(ComponentName name, IBinder service) {
         serviceBinder = (MetaWearBleService.LocalBinder) service;
-        //retrieveBoard();
+        retrieveBoard();
         speak_Queue_Add("getting board");
 
 
@@ -1450,6 +1458,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
         public void connected() {
             Log.i("MainActivity", "Connected");
             speak_Queue_Add("Got Board");
+            initializevibration();
         }
 
         @Override
@@ -1466,6 +1475,39 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
     public void connectBoard() {
         mwBoard.setConnectionStateHandler(stateHandler);
         mwBoard.connect();
+    }
+
+    public void initializevibration(){
+        try
+        {
+            I2C i2cModule= mwBoard.getModule(I2C.class);
+            byte deviceaddress=(byte) 0x5A;//0xB4 ;  //5A
+            byte registeraddress = (byte) 0x00; //0C
+            byte vibration [] = new byte[1]; // 0B
+            vibration[0]=(byte) 0x10;
+            i2cModule.writeData(deviceaddress,registeraddress,vibration);
+            speak_Queue_Add("Tried to write");
+        }
+        catch (Exception e){
+            alertexception(e);
+        }
+
+    }
+    public void sendvibration(int type){
+        try
+        {
+            I2C i2cModule= mwBoard.getModule(I2C.class);
+            byte deviceaddress=(byte) 0x5A;//0xB4 ;  //5A
+            byte registeraddress = (byte) 0x0C; //0C
+            byte vibration [] = new byte[1]; // 0B
+            vibration[0]=(byte) 0x0B;
+            i2cModule.writeData(deviceaddress,registeraddress,vibration);
+            speak_Queue_Add("Tried to write");
+        }
+        catch (Exception e){
+            alertexception(e);
+        }
+
     }
 
 
