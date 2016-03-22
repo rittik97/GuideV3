@@ -1,3 +1,4 @@
+// Short & Long Pitch  company email Screen Shots
 package com.example.rittik.guide;
 
 import android.Manifest;
@@ -106,6 +107,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
     private int flagforinstructions=0;
     private int flagforendturns=0;
     private int flagforturns=0;
+    private int hasboard=0;
     private JSONObject objr;
     private boolean walkingnavigating;
     private boolean animatenavigating;
@@ -162,8 +164,8 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
         builder.show();
 
         buildGoogleApiClient();
-        getApplicationContext().bindService(new Intent(this, MetaWearBleService.class),
-                this, Context.BIND_AUTO_CREATE);
+        //getApplicationContext().bindService(new Intent(this, MetaWearBleService.class),
+         //       this, Context.BIND_AUTO_CREATE);
 
 
         // Set a Toolbar to replace the ActionBar.
@@ -439,9 +441,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
         //makecameragotocurrentlocation(mCurrentLocation);
         //speak_Queue_Add(mCurrentLocation.toString());
 
-        if(walkingnavigating==true && parserTask.getStatus().equals(AsyncTask.Status.FINISHED) == true
-                && gi.getStatus().equals(AsyncTask.Status.FINISHED) == true
-                && endloc.getStatus().equals(AsyncTask.Status.FINISHED) == true){
+        if(flagforcoordinates==1 && flagforendturns==1 && flagforinstructions==1 && flagforendturns==1 && isnavigating==true){
             if(walkingnavigating) {
 
                 float results[] = new float[3];
@@ -454,19 +454,34 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
                         , endlocations.get(currentturn).longitude,
                         results
                 );
-
                 if (results[0] < 15) {
+                    if(currentturn>=1){
+                        speak_Queue_Add(instructions.get(currentturn).toString());
+                    }
+
+
+                }
+
+                if (results[0] < 5) {
                     //talkthis("turn");
-                    //speak_Queue_Add(instructions.get(currentturn).toString());
+                    speak_Queue_Add(instructions.get(currentturn).toString());
 
                     if(nexttturn<turns.size() && currentturn!=0) {
-                        speak_Queue_Add(turns.get(nexttturn).toString());
+                        int type=turns.get(nexttturn).toString().indexOf("right");
+                        try {
+                            //  if(type!=-1){mwBoard.getModule(Haptic.class).startMotor(75.f, (short) 1500);}
+                            // else {mwBoard.getModule(Haptic.class).startMotor(50.f, (short) 500);}
+
+                            sendvibration(type);
+
+                        } catch (Exception e) {
+                            alertexception(e);
+                        }
                         nexttturn++;
                     }
 
-                    currentturn++;
 
-                    //Toast.makeText(getApplicationContext(),turns.get(currentturn), Toast.LENGTH_SHORT).show();
+                    currentturn++;
                 }
                 if (currentturn == totalturns) {//You have reached destination
                     animatenavigating= false;
@@ -573,11 +588,11 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
 
         switch (request_code) {
             case 100: {
-                if (result_code == -1 && i != null) {
+                if (result_code == RESULT_OK && i != null) {
                     ArrayList<String> result = i.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
                     //spoken.setText(result.get(0));
                     speak_Queue_Add(result.get(0));
-                    Toast.makeText(this, result.get(0).toString(), Toast.LENGTH_SHORT).show();
+                  //  Toast.makeText(this, result.get(0).toString(), Toast.LENGTH_SHORT).show();
                     understand(result.get(0));
 
                 }
@@ -588,12 +603,29 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
     }
 
     public void understand(String s) {
-        if (s.indexOf("text") > 0) {
+        speak_Queue_Add("Understanding");
+        Toast.makeText(this, s, Toast.LENGTH_SHORT).show();
+        if (s.indexOf("text") >= 0) {
             if (haspermission(Manifest.permission.SEND_SMS)) {
                 sendsms(mCurrentLocation);
             } else {
                 requestsmspermission();
             }
+        } else if(s.indexOf("next turn") >= 0){
+
+            float results[] = new float[3];
+            double mylat;
+            double mylong;
+            Location loc = (mCurrentLocation);
+
+            Location.distanceBetween(loc.getLatitude(), loc.getLongitude()
+                    , endlocations.get(currentturn).latitude
+                    , endlocations.get(currentturn).longitude,
+                    results
+            );
+            speak_Queue_Add("In" + String.valueOf(results[0]) +"meters");
+            speak_Queue_Add(instructions.get(currentturn).toString());
+
         }
 
     }
@@ -716,8 +748,11 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
         //map.clear();
         if(!isnavigating) return;
         if(flagforcoordinates==1 && flagforendturns==1 && flagforinstructions==1 && flagforendturns==1 && isnavigating==true){
-            animator.stopAnimation();
-            map.clear();
+            //animator.stopAnimation();
+            //map.clear();
+            listens();
+
+
             return;
         }
 
@@ -930,7 +965,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
         protected void onPostExecute(ArrayList result) {
             flagforinstructions=1;
 
-            // Toast.makeText(getApplicationContext(),String.valueOf(instructions.size()), Toast.LENGTH_SHORT).show();
+            //Toast.makeText(getApplicationContext(),String.valueOf(instructions.size()), Toast.LENGTH_SHORT).show();
             //Toast.makeText(getApplicationContext(),instructions.toString(), Toast.LENGTH_LONG).show();
 
             if(flagforcoordinates==1 && flagforendturns==1 && flagforinstructions==1 && flagforendturns==1 && isnavigating==true) {
@@ -1235,8 +1270,15 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
                         , endlocations.get(currentturn).longitude,
                         results
                 );
-
                 if (results[0] < 15) {
+                    if(currentturn>=1){
+                        speak_Queue_Add(instructions.get(currentturn).toString());
+                    }
+
+
+                }
+
+                if (results[0] < 5) {
                     //talkthis("turn");
                     speak_Queue_Add(instructions.get(currentturn).toString());
 
@@ -1245,7 +1287,9 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
                         try {
                           //  if(type!=-1){mwBoard.getModule(Haptic.class).startMotor(75.f, (short) 1500);}
                            // else {mwBoard.getModule(Haptic.class).startMotor(50.f, (short) 500);}
+
                             sendvibration(type);
+
                         } catch (Exception e) {
                             alertexception(e);
                         }
@@ -1277,6 +1321,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
 
                     speak_Queue_Add("You have arrived");
                     lastpoint=false;
+                    sendvibration(1000);
                 }
 
             }
@@ -1458,12 +1503,16 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
         public void connected() {
             Log.i("MainActivity", "Connected");
             speak_Queue_Add("Got Board");
+            hasboard=1;
             initializevibration();
         }
 
         @Override
         public void disconnected() {
             Log.i("MainActivity", "Connected Lost");
+            hasboard=0;
+            connectBoard();
+
         }
 
         @Override
@@ -1494,19 +1543,29 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
 
     }
     public void sendvibration(int type){
-        try
-        {
-            I2C i2cModule= mwBoard.getModule(I2C.class);
-            byte deviceaddress=(byte) 0x5A;//0xB4 ;  //5A
+    if(hasboard>0) {
+        try {
+            I2C i2cModule = mwBoard.getModule(I2C.class);
+            byte deviceaddress = (byte) 0x5A;//0xB4 ;  //5A
             byte registeraddress = (byte) 0x0C; //0C
-            byte vibration [] = new byte[1]; // 0B
-            vibration[0]=(byte) 0x0B;
-            i2cModule.writeData(deviceaddress,registeraddress,vibration);
-            speak_Queue_Add("Tried to write");
-        }
-        catch (Exception e){
+            byte vibration[];
+            if (type != -1) {
+                vibration = new byte[1]; // 0B
+                vibration[0] = (byte) 0x0B;
+            } else if (type == 1000) {
+                vibration = new byte[1]; // 0B
+                vibration[0] = (byte) 0xAB;
+            } else {
+                vibration = new byte[2]; // 0B
+                vibration[0] = (byte) 0x0B;
+                vibration[1] = (byte) 0x0B;
+            }
+            i2cModule.writeData(deviceaddress, registeraddress, vibration);
+            //speak_Queue_Add("Tried to write");
+        } catch (Exception e) {
             alertexception(e);
         }
+    }
 
     }
 
