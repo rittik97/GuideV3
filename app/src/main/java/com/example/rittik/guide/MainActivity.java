@@ -648,6 +648,8 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
             speak_Queue_Add("In" + String.valueOf(results[0]) +"meters");
             speak_Queue_Add(instructions.get(currentturn).toString());
 
+        }else if(s.indexOf("home")>=0){
+            ReadPhoneContacts("home");
         }
 
     }
@@ -1644,6 +1646,24 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
     private void registerSMSReceiver() {
         IntentFilter intentFilter = new IntentFilter("android.provider.Telephony.SMS_RECEIVED");
         registerReceiver(smsReceiver, intentFilter);
+    }
+    public void ReadPhoneContacts(String name)
+    {
+        Cursor cursor = getContentResolver().query(ContactsContract.Contacts.CONTENT_URI, null, null, null, null);
+        Integer contactsCount = cursor.getCount(); // get how many contacts you have in your contacts list
+        if (contactsCount > 0){
+            while(cursor.moveToNext()){
+                String id = cursor.getString(cursor.getColumnIndex(ContactsContract.Contacts._ID));
+                String contactName = cursor.getString(cursor.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME));
+                if(name.equalsIgnoreCase(contactName)){speak_Queue_Add("Found");
+                    break;
+                }
+
+            }
+        }
+
+
+
     }
 
 
