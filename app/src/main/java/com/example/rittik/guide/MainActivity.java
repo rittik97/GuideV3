@@ -6,22 +6,27 @@ import android.app.AlertDialog;
 import android.app.FragmentTransaction;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
+import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.graphics.Color;
 import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
 //import android.location.LocationListener;
+import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.SystemClock;
+import android.provider.ContactsContract;
 import android.speech.RecognizerIntent;
 import android.speech.tts.TextToSpeech;
 import android.support.design.widget.NavigationView;
@@ -35,6 +40,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.Toolbar;
 import android.telephony.SmsManager;
+import android.telephony.SmsMessage;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -137,6 +143,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
     private getinstructions gi;
     private endpoints endloc;
     private boolean lastpoint=false;
+    private String smsmessagetext;
 
 
 
@@ -144,6 +151,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
     ArrayList <LatLng> endlocations=null;
     private LatLng destinationloc;
 
+    private BroadcastReceiver smsReceiver;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -164,6 +172,8 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
         builder.show();
 
         buildGoogleApiClient();
+        initializeSMSReceiver();
+        registerSMSReceiver();
         //getApplicationContext().bindService(new Intent(this, MetaWearBleService.class),
          //       this, Context.BIND_AUTO_CREATE);
 
@@ -511,6 +521,18 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
         }
 
 
+
+    }
+    public void requestsmspermissionreadcontacts() {
+        if (ContextCompat.checkSelfPermission(MainActivity.this,
+                Manifest.permission.READ_CONTACTS)
+                != PackageManager.PERMISSION_GRANTED) {
+
+            ActivityCompat.requestPermissions(MainActivity.this,
+                    new String[]{Manifest.permission.READ_CONTACTS},
+                    requestfinelocation);
+
+        }
 
     }
 
@@ -1567,6 +1589,61 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
         }
     }
 
+    }
+
+
+    private void initializeSMSReceiver() {
+        smsReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+
+                Bundle bundle = intent.getExtras();
+                if (bundle != null) {
+                    Object[] pdus = (Object[]) bundle.get("pdus");
+                    for (int i = 0; i < pdus.length; i++) {
+                        byte[] pdu = (byte[]) pdus[i];
+                        SmsMessage message = SmsMessage.createFromPdu(pdu);
+                        smsmessagetext = message.getDisplayMessageBody();
+                        String sender = getContactName(message.getOriginatingAddress());
+                        //speaker.pause(LONG_DURATION);
+                        if (sender.equals("No Permission")) {
+                            speak_Queue_Add("You have to give us permission to use your contact list");
+                        }
+                        else
+                        {
+                            speak_Queue_Add("You have a new message from"+sender);
+                        }
+                        // speaker.pause(SHORT_DURATION);
+                        // speaker.speak(text);
+                        // smsSender.setText("Message from " + sender);
+                        //smsText.setText(text);
+                    }
+                }
+
+            }
+        };
+    }
+
+    private String getContactName(String phone){
+        if(haspermission(Manifest.permission.READ_CONTACTS)){
+            Uri uri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(phone));
+            String projection[] = new String[]{ContactsContract.Data.DISPLAY_NAME};
+            Cursor cursor = getContentResolver().query(uri, projection, null, null, null);
+            if (cursor.moveToFirst()) {
+                return cursor.getString(0);
+            } else {
+                return "unknown number";
+            }
+        }
+        else {
+            requestsmspermissionreadcontacts();
+            return "No Permission";
+        }
+    }
+
+    private void registerSMSReceiver() {
+        IntentFilter intentFilter = new IntentFilter("android.provider.Telephony.SMS_RECEIVED");
+        registerReceiver(smsReceiver, intentFilter);
     }
 
 
