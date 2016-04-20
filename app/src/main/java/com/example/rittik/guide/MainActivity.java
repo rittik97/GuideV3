@@ -39,6 +39,7 @@ import android.support.v4.widget.DrawerLayout;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.Toolbar;
+import android.telecom.Call;
 import android.telephony.SmsManager;
 import android.telephony.SmsMessage;
 import android.util.Log;
@@ -76,10 +77,14 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -124,6 +129,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
     private MetaWearBleService.LocalBinder serviceBinder;
     private final String MW_MAC_ADDRESS="E9:BA:A6:41:99:A8";// "D1:C6:B6:0B:E6:56";
     private MetaWearBoard mwBoard;
+    private String Ubercost;
 
     //routes, points has Polyline
     // instructions has turn right on amsterdam
@@ -144,6 +150,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
     private endpoints endloc;
     private boolean lastpoint=false;
     private String smsmessagetext;
+    private LatLng toPosition;
 
 
 
@@ -152,6 +159,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
     private LatLng destinationloc;
 
     private BroadcastReceiver smsReceiver;
+    private String phonenumber;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -650,6 +658,25 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
 
         }else if(s.indexOf("home")>=0){
             ReadPhoneContacts("home");
+        }else if(s.indexOf("cab")>=0){
+            speak_Queue_Add("Uber");
+
+            JSONObject json = new JSONObject();
+            try {
+                json.put("start_latitude", String.valueOf(mCurrentLocation.getLatitude()));
+                json.put("start_longitude", String.valueOf(mCurrentLocation.getLongitude()));
+                json.put("end_latitude", String.valueOf(toPosition.latitude));
+                json.put("end_longitude", String.valueOf(toPosition.longitude));
+                Toast.makeText(this, json.toString(), Toast.LENGTH_LONG).show();
+            }
+            catch (Exception e){
+                alertexception(e);
+            }
+
+            CallUber cu=new CallUber();
+            cu.execute();
+
+
         }
 
     }
@@ -781,7 +808,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
         }
 
             LatLng fromPosition=null;// = new LatLng(40.798506, -73.964577);
-        LatLng toPosition=null;// = new LatLng(40.798204, -73.952304);//40.8079639, -73.9630146);
+        toPosition=null;// = new LatLng(40.798204, -73.952304);//40.8079639, -73.9630146);
         try {
             EditText destination = (EditText) findViewById(R.id.textView);
             String dest = destination.getText().toString();
@@ -1651,18 +1678,168 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
     {
         Cursor cursor = getContentResolver().query(ContactsContract.Contacts.CONTENT_URI, null, null, null, null);
         Integer contactsCount = cursor.getCount(); // get how many contacts you have in your contacts list
+        Toast.makeText(this,String.valueOf(contactsCount), Toast.LENGTH_SHORT).show();
         if (contactsCount > 0){
             while(cursor.moveToNext()){
                 String id = cursor.getString(cursor.getColumnIndex(ContactsContract.Contacts._ID));
                 String contactName = cursor.getString(cursor.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME));
                 if(name.equalsIgnoreCase(contactName)){speak_Queue_Add("Found");
-                    break;
+                    if (Integer.parseInt(cursor.getString(cursor.getColumnIndex(ContactsContract.Contacts.HAS_PHONE_NUMBER))) > 0)
+                    {
+                        //the below cursor will give you details for multiple contacts
+                        Cursor pCursor = getContentResolver().query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,null,
+                                ContactsContract.CommonDataKinds.Phone.CONTACT_ID +" = ?",
+                                new String[]{id}, null);
+                        // continue till this cursor reaches to all phone numbers which are associated with a contact in the contact list
+                        while (pCursor.moveToFirst()) {
+                            int phoneType = pCursor.getInt(pCursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.TYPE));
+                            //String isStarred 		= pCur.getString(pCur.getColumnIndex(ContactsContract.CommonDataKinds.Phone.STARRED));
+                            phonenumber = pCursor.getString(pCursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
+                            placecall(phonenumber);
+
+                            Toast.makeText(this, String.valueOf(phonenumber), Toast.LENGTH_SHORT).show();
+                            /*
+                            * switch (phoneType)
+		                  {
+		                        case Phone.TYPE_MOBILE:
+		                            Log.e(contactName + ": TYPE_MOBILE", " " + phoneNo);
+		                            break;
+		                        case Phone.TYPE_HOME:
+		                            Log.e(contactName + ": TYPE_HOME", " " + phoneNo);
+		                            break;
+		                        case Phone.TYPE_WORK:
+		                            Log.e(contactName + ": TYPE_WORK", " " + phoneNo);
+		                            break;
+		                        case Phone.TYPE_WORK_MOBILE:
+		                            Log.e(contactName + ": TYPE_WORK_MOBILE", " " + phoneNo);
+		                            break;
+		                        case Phone.TYPE_OTHER:
+		                            Log.e(contactName + ": TYPE_OTHER", " " + phoneNo);
+		                            break;
+		                        default:
+		                            break;
+		                  }
+                            *
+                            *
+                            * */
+                        }
+                        pCursor.close();
+                    }
+
+                        break;
                 }
 
+
             }
+
         }
 
 
+        cursor.close();
+
+    }
+    public void placecall(String Number) {
+        Intent callIntent = new Intent(Intent.ACTION_CALL);
+        //String phoneNumber = unItemVal.getText().toString();
+        callIntent.setData(Uri.parse("tel:" + Number));
+        startActivity(callIntent);
+    }
+
+    private class CallUber extends AsyncTask<Void, Void, Void>{
+        URL url;
+        JSONObject json;
+
+
+        @Override
+        protected Void doInBackground(Void... params) {
+            String data = "";
+            try{
+                url=new URL("https://enigmatic-reaches-59241.herokuapp.com/tryme?start_latitude="+mCurrentLocation.getLatitude()+"&start_longitude="+mCurrentLocation.getLongitude()+"&end_latitude="+toPosition.latitude+"&end_longitude="+toPosition.longitude);
+            }
+            catch (MalformedURLException e){
+                alertexception(e);
+            }
+            try {
+
+
+                json = new JSONObject();
+                json.put("start_latitude", (mCurrentLocation.getLatitude()));
+                json.put("start_longitude", (mCurrentLocation.getLongitude()));
+                json.put("end_latitude", (toPosition.latitude));
+                json.put("end_longitude", (toPosition.longitude ));
+
+            }
+            catch (Exception e){
+                System.out.println(e);
+            }
+
+
+
+
+            HttpURLConnection urlConnection;
+            try{
+                // Fetching the data from web service
+
+                urlConnection = (HttpURLConnection) url.openConnection();
+
+                urlConnection.setRequestMethod("POST");
+                urlConnection.setAllowUserInteraction(false);
+                urlConnection.setConnectTimeout(10000);
+                urlConnection.setReadTimeout(10000);
+                urlConnection.setDoInput(true);
+                urlConnection.setDoOutput(true);
+                String s="StartLat:"+mCurrentLocation.getLatitude()+"StartLong:"+mCurrentLocation.getLongitude();
+                OutputStream outputStream = urlConnection.getOutputStream();
+                outputStream.write(json.toString().getBytes("UTF-8"));
+
+
+                outputStream.close();
+                urlConnection.connect();
+                InputStream in = null;
+
+                try {
+                    in = urlConnection.getInputStream();
+                    int ch;
+                    StringBuffer sb = new StringBuffer();
+                    while ((ch = in.read()) != -1) {
+                        sb.append((char) ch);
+                    }
+                     Ubercost=sb.toString();
+                    speak_Queue_Add(Ubercost);
+                } catch (IOException e) {
+                    throw e;
+                } finally {
+                    if (in != null) {
+                        in.close();
+                    }
+                }
+                /*
+
+
+                BufferedReader streamReader = new BufferedReader(new InputStreamReader(in, "UTF-8"));
+                StringBuilder responseStrBuilder = new StringBuilder();
+
+                String inputStr;
+                while ((inputStr = streamReader.readLine()) != null)
+                    responseStrBuilder.append(inputStr);
+                objr=new JSONObject(responseStrBuilder.toString());
+
+                data=objr.toString();
+                System.out.println(data+"catchddd");
+                speak_Queue_Add(data);
+                */
+
+
+            }catch(Exception e){
+                Log.d("Background Task",e.toString());
+
+            }
+
+
+
+
+            return null;
+        }
 
     }
 
