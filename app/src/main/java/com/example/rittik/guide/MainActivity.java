@@ -16,6 +16,10 @@ import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Color;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
@@ -96,7 +100,7 @@ import com.mbientlab.metawear.module.I2C;
 //import android.widget.Toolbar;
 
 public class MainActivity extends AppCompatActivity implements TextToSpeech.OnInitListener, OnMapReadyCallback,GoogleApiClient.ConnectionCallbacks
-        , GoogleApiClient.OnConnectionFailedListener,LocationListener, ServiceConnection {
+        , GoogleApiClient.OnConnectionFailedListener,LocationListener, ServiceConnection,SensorEventListener {
     private DrawerLayout mDrawer;
     private Toolbar toolbar;
     private NavigationView nvDrawer;
@@ -130,6 +134,9 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
     private final String MW_MAC_ADDRESS="E9:BA:A6:41:99:A8";// "D1:C6:B6:0B:E6:56";
     private MetaWearBoard mwBoard;
     private String Ubercost;
+    private SensorManager senSensorManager;
+    private Sensor senAccelerometer;
+    private Sensor senGyro;
 
     //routes, points has Polyline
     // instructions has turn right on amsterdam
@@ -161,6 +168,10 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
     private BroadcastReceiver smsReceiver;
     private String phonenumber;
 
+    private long lastUpdate = 0;
+    private float last_x, last_y, last_z;
+    private float glast_x, glast_y, glast_z;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -178,8 +189,14 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
                 });
         builder.create();
         builder.show();
+        senSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        senAccelerometer = senSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        senSensorManager.registerListener(this, senAccelerometer , SensorManager.SENSOR_DELAY_NORMAL);
+        senGyro=senSensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
+        senSensorManager.registerListener(this, senGyro , SensorManager.SENSOR_DELAY_NORMAL);
 
-        buildGoogleApiClient();
+
+    buildGoogleApiClient();
         initializeSMSReceiver();
         registerSMSReceiver();
         //getApplicationContext().bindService(new Intent(this, MetaWearBleService.class),
@@ -238,6 +255,15 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
             //alertexception(e);
         }
 
+    }
+    protected void onPause() {
+        super.onPause();
+        senSensorManager.unregisterListener(this);
+    }
+
+    protected void onResume() {
+        super.onResume();
+        senSensorManager.registerListener(this, senAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
     }
 
     @Override
@@ -853,6 +879,134 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
             //while (parserTask.getStatus().equals(AsyncTask.Status.FINISHED) ==false && gi.getStatus().equals(AsyncTask.Status.FINISHED)==false)
 
         }
+
+    @Override
+    public void onSensorChanged(SensorEvent sensorEvent) {
+        SendPhoneSensorData spsd=new SendPhoneSensorData();
+        long curTime = System.currentTimeMillis();
+        if((curTime - lastUpdate) > 1000) {
+            lastUpdate=curTime;
+            Sensor mySensor = sensorEvent.sensor;
+            if (mySensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+                float x = sensorEvent.values[0];
+                float y = sensorEvent.values[1];
+                float z = sensorEvent.values[2];
+                    last_x = x;
+                    last_y = y;
+                    last_z = z;
+                }
+            if (mySensor.getType() == Sensor.TYPE_GYROSCOPE) {
+                float x = sensorEvent.values[0];
+                float y = sensorEvent.values[1];
+                float z = sensorEvent.values[2];
+                // Toast.makeText(this,"Gyro",Toast.LENGTH_SHORT).show();
+                glast_x = x;
+                glast_y = y;
+                glast_z = z;
+            }
+           spsd.execute();
+        }
+    }
+
+
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+
+    }
+
+    private class SendPhoneSensorData extends AsyncTask<Void, Void, Void>{
+        URL url;
+        JSONObject json;
+
+        @Override
+        protected Void doInBackground(Void... params) {
+            String data = "";
+            try{
+                url=new URL("https://enigmatic-reaches-59241.herokuapp.com/phonesensordata?accx="+last_x+"&accy="+last_y+"&accz="+last_z+"&gyrox="+glast_x+"&gyroy="+glast_y+"&gyroz="+glast_z);
+            }
+            catch (MalformedURLException e){
+                alertexception(e);
+            }
+            try {
+
+
+                json = new JSONObject();
+                json.put("start_latitude", (mCurrentLocation.getLatitude()));
+                json.put("start_longitude", (mCurrentLocation.getLongitude()));
+                json.put("end_latitude", (toPosition.latitude));
+                json.put("end_longitude", (toPosition.longitude ));
+
+            }
+            catch (Exception e){
+                Log.i("ffff",e.toString());
+            }
+
+
+
+
+            HttpURLConnection urlConnection;
+            try{
+
+                urlConnection = (HttpURLConnection) url.openConnection();
+
+                urlConnection.setRequestMethod("POST");
+                urlConnection.setAllowUserInteraction(false);
+                urlConnection.setConnectTimeout(10000);
+                urlConnection.setReadTimeout(10000);
+                urlConnection.setDoInput(true);
+                urlConnection.setDoOutput(true);
+                String s="StartLat:"+mCurrentLocation.getLatitude()+"StartLong:"+mCurrentLocation.getLongitude();
+                OutputStream outputStream = urlConnection.getOutputStream();
+                outputStream.write(json.toString().getBytes("UTF-8"));
+
+
+                outputStream.close();
+                urlConnection.connect();
+                Log.i("ffff",url.toString());
+                InputStream in = null;
+
+                try {
+                    in = urlConnection.getInputStream();
+                    int ch;
+                    StringBuffer sb = new StringBuffer();
+                    while ((ch = in.read()) != -1) {
+                        sb.append((char) ch);
+                    }
+                    Ubercost=sb.toString();
+                    speak_Queue_Add(Ubercost);
+                } catch (IOException e) {
+                    throw e;
+                } finally {
+                    if (in != null) {
+                        in.close();
+                    }
+                }
+                /*
+
+
+                BufferedReader streamReader = new BufferedReader(new InputStreamReader(in, "UTF-8"));
+                StringBuilder responseStrBuilder = new StringBuilder();
+
+                String inputStr;
+                while ((inputStr = streamReader.readLine()) != null)
+                    responseStrBuilder.append(inputStr);
+                objr=new JSONObject(responseStrBuilder.toString());
+
+                data=objr.toString();
+                System.out.println(data+"catchddd");
+                speak_Queue_Add(data);
+                */
+
+
+            }catch(Exception e){
+                Log.i("ffff", e.toString());
+
+            }
+           return null;
+        }
+    }
+
 
 
 
@@ -1778,7 +1932,6 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
 
             HttpURLConnection urlConnection;
             try{
-                // Fetching the data from web service
 
                 urlConnection = (HttpURLConnection) url.openConnection();
 
