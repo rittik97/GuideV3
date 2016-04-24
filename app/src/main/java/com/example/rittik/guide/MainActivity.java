@@ -90,6 +90,8 @@ import java.net.URL;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -685,25 +687,37 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
         }else if(s.indexOf("home")>=0){
             ReadPhoneContacts("home");
         }else if(s.indexOf("cab")>=0){
-            speak_Queue_Add("Uber");
 
-            JSONObject json = new JSONObject();
-            try {
-                json.put("start_latitude", String.valueOf(mCurrentLocation.getLatitude()));
-                json.put("start_longitude", String.valueOf(mCurrentLocation.getLongitude()));
-                json.put("end_latitude", String.valueOf(toPosition.latitude));
-                json.put("end_longitude", String.valueOf(toPosition.longitude));
-                Toast.makeText(this, json.toString(), Toast.LENGTH_LONG).show();
-            }
-            catch (Exception e){
-                alertexception(e);
-            }
+
+
 
             CallUber cu=new CallUber();
             cu.execute();
 
 
+        }else if(s.indexOf("time")>=0){
+            Calendar rightNow = Calendar.getInstance();
+            int dayofweek=rightNow.get(Calendar.DAY_OF_WEEK);
+            String day="";
+            if(dayofweek==1)day="Sunday";
+            else if(dayofweek==2)day="Monday";
+            else if(dayofweek==3)day="Tuesday";
+            else if(dayofweek==4)day="Wednesday";
+            else if(dayofweek==5)day="Thursday";
+            else if(dayofweek==6)day="Friday";
+            else if(dayofweek==7)day="Saturday";
+            String hour=String.valueOf(rightNow.get(Calendar.HOUR));
+            int ampm=rightNow.get(Calendar.AM_PM);
+            String min=String.valueOf(rightNow.get(Calendar.MINUTE));
+            String sampm;
+            if(ampm==1)
+                sampm="PM";
+            else
+                sampm="AM";
+            speak_Queue_Add("It is "+hour+" "+min+" "+sampm+" on "+day);
+
         }
+
 
     }
 
@@ -1795,6 +1809,7 @@ public class MainActivity extends AppCompatActivity implements TextToSpeech.OnIn
                         else
                         {
                             speak_Queue_Add("You have a new message from"+sender);
+                            speak_Queue_Add("Tap the button if you want me to read it out");
                         }
                         // speaker.pause(SHORT_DURATION);
                         // speaker.speak(text);
